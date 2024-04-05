@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Real-time Point Plotter</title>
+    <style>
+      canvas {
+        border: 1px solid black;
+      }
+      button {
+        margin-left: 10px;
+        margin-right: 10px;
+      }
+      form {
+        margin-bottom: 20px;
+        margin-left: 10px;
+      }
+      .wrapper {
+        display: flex;
+        flex-direction: row;
+      }
+      .ptCanvas {
+        flex: 1;
+      }
+      .btns {
+        flex: 1;
+      }
+      .route-btns {
+        margin-bottom: 30px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrapper">
+      <div class="ptCanvas">
+        <canvas id="myCanvas" width="700" height="500"></canvas>
+        <ul id="coordinatesList"></ul>
+      </div>
+      <div class="btns">
+        <div class="route-btns">
+          <button id="btnkps" onclick="routekps()">Visualize using KPS</button>
+          <button id="btnjm" onclick="routejm()">
+            Visualize using Jarvis March
+          </button>
+          <button id="btnpf" onclick="routepf()">Analyse Report</button>
+        </div>
+        <div>
+          <form>
+            <label for="numPts">Number of random points:</label>
+            <input type="number" value="70" />
+          </form>
+          <button onclick="generateRandomPts()">Generate random buttons</button>
+          <button onclick="clearCanvas()">Clear</button>
+        </div>
+      </div>
+    </div>
+    <script>
+      var allPts = [];
+      function routepf() {
+        window.location = "/analysis/index.html";
+      }
+      function clearCanvas() {
+        const canvas = document.getElementById("myCanvas");
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        function drawAxes(ctx, width, height) {
+          ctx.beginPath();
+          ctx.moveTo(0, height / 2);
+          ctx.lineTo(width, height / 2);
+          ctx.moveTo(width / 2, 0);
+          ctx.lineTo(width / 2, height);
+          ctx.strokeStyle = "black";
+          ctx.stroke();
+        }
+        drawAxes(ctx, canvas.width, canvas.height);
+        allPts = [];
+        const coordinatesList = document.getElementById("coordinatesList");
+        coordinatesList.innerHTML = "";
+      }
+      function generateRandomPts() {
+        const numPts = document.querySelector("input[type=number]").value;
+        if (numPts > 100000) {
+          alert("Number of points should be less than 100000");
+          return;
+        }
+        const points = [];
+        const canvas = document.getElementById("myCanvas");
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = 0; i < numPts; i++) {
+          const x = Math.floor(Math.random() * canvas.width);
+          const y = Math.floor(Math.random() * canvas.height);
+          points.push({ x, y });
+          drawPoint(ctx, x, y);
+        }
+        displayCoordinates(points);
+
+        console.log("Random points:", points);
+
+        // Draw x and y axes
+        drawAxes(ctx, canvas.width, canvas.height);
+
+        function drawPoint(ctx, x, y) {
+          ctx.beginPath();
+          ctx.arc(x, y, 5, 0, 2 * Math.PI);
+          ctx.fillStyle = "blue";
+          ctx.fill();
+          ctx.closePath();
+        }
+
+        function displayCoordinates(points) {
+          const coordinatesList = document.getElementById("coordinatesList");
+          coordinatesList.innerHTML = "";
+          allPts = [];
+          points.forEach((point, index) => {
+            const li = document.createElement("li");
+            li.textContent = `Point ${index + 1}: (${point.x - 350}, ${
+              point.y - 250
+            })`;
+            allPts.push([point.x, point.y]);
+            coordinatesList.appendChild(li);
+          });
+        }
+
+        function logCoordinates(points) {
+          console.log("Coordinates:", points);
+        }
+
+        function drawAxes(ctx, width, height) {
+          ctx.beginPath();
+          ctx.moveTo(0, height / 2);
+          ctx.lineTo(width, height / 2);
+          ctx.moveTo(width / 2, 0);
+          ctx.lineTo(width / 2, height);
+          ctx.strokeStyle = "black";
+          ctx.stroke();
+        }
+      }
+      function routekps() {
+        localStorage["coordinatesList"] = JSON.stringify(allPts);
+        location.replace("/index.html");
+      }
+
+      function routejm() {
+        localStorage["coordinatesList"] = JSON.stringify(allPts);
+        location.replace("/JarvisMarch/jm/index.html");
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        const canvas = document.getElementById("myCanvas");
+        const ctx = canvas.getContext("2d");
+        const points = [];
+
+        // Draw x and y axes
+        drawAxes(ctx, canvas.width, canvas.height);
+
+        canvas.addEventListener("click", (event) => {
+          const rect = canvas.getBoundingClientRect();
+          const x = event.clientX - rect.left;
+          const y = event.clientY - rect.top;
+          points.push({ x, y });
+
+          drawPoint(ctx, x, y);
+          displayCoordinates(points);
+          logCoordinates(points);
+        });
+
+        function drawPoint(ctx, x, y) {
+          ctx.beginPath();
+          ctx.arc(x, y, 5, 0, 2 * Math.PI);
+          ctx.fillStyle = "blue";
+          ctx.fill();
+          ctx.closePath();
+        }
+
+        function displayCoordinates(points) {
+          const coordinatesList = document.getElementById("coordinatesList");
+          coordinatesList.innerHTML = "";
+          allPts = [];
+          points.forEach((point, index) => {
+            const li = document.createElement("li");
+            li.textContent = `Point ${index + 1}: (${point.x - 350}, ${
+              point.y - 250
+            })`;
+            allPts.push([point.x, point.y]);
+            coordinatesList.appendChild(li);
+          });
+        }
+
+        function logCoordinates(points) {
+          console.log("Coordinates:", points);
+        }
+
+        function drawAxes(ctx, width, height) {
+          ctx.beginPath();
+          ctx.moveTo(0, height / 2);
+          ctx.lineTo(width, height / 2);
+          ctx.moveTo(width / 2, 0);
+          ctx.lineTo(width / 2, height);
+          ctx.strokeStyle = "black";
+          ctx.stroke();
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Convex Hull Visualization</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+      }
+      svg {
+        display: block;
+        margin: auto;
+      }
+      .wrapper {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+      }
+      .homebtn {
+        margin-bottom: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrapper">
+      <div>
+        <svg id="container"></svg>
+      </div>
+      <div>
+        <button class="homebtn" onclick="routehome()">Home</button>
+        <form>
+          <label>Set Animation duration</label>
+          <input type="number" value="2000" />
+          <button id="startbtn" type="button" onclick="setDuration()">
+            Start
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      let animationDuration = 2000;
+      function setDuration() {
+        const input = document.querySelector("input");
+        animationDuration = parseInt(input.value, 10);
+        alert(`Animation duration set to ${animationDuration ?? 2000}ms`);
+        startConvAnimation();
+      }
+      function routehome() {
+        location.replace("/JarvisMarch/fein/index.html");
+      }
+      class Coordinate {
+        constructor(x = 0, y = 0) {
+          this.x = x;
+          this.y = y;
+        }
+        toString() {
+          return `(${this.x}, ${this.y})`;
+        }
+      }
+
+      function plotConvHull(pts, _edges) {
+        const width = 800;
+        const height = 600;
+        const margin = { top: 50, right: 50, bottom: 50, left: 50 };
+        const innerWidth = width - margin.left - margin.right;
+        const innerHeight = height - margin.top - margin.bottom;
+
+        // Generate random vertices
+        const numVertices = pts.length;
+        const vertices = pts.map((e) => ({ x: e.x, y: e.y }));
+        console.log(vertices);
+        let onConvexHull = Array(numVertices).fill(false);
+
+        // Generate random edges between vertices
+        const edges = [];
+        for (let i = 0; i < _edges.length; i++) {
+          let s = -1;
+          let t = -1;
+          for (let j = 0; j < numVertices; ++j) {
+            if (
+              _edges[i].x === vertices[j].x &&
+              _edges[i].y === vertices[j].y
+            ) {
+              s = j;
+              break;
+            }
+          }
+          const ti = (i + 1) % _edges.length;
+          for (let j = 0; j < numVertices; ++j) {
+            if (
+              _edges[ti].x === vertices[j].x &&
+              _edges[ti].y === vertices[j].y
+            ) {
+              t = j;
+              break;
+            }
+          }
+          if (s !== -1 && t !== -1) {
+            onConvexHull[s] = true;
+            onConvexHull[t] = true;
+            edges.push({ source: s, target: t });
+          } else {
+            console.error("Invalid edge: ", _edges[i], s, t);
+          }
+        }
+
+        // Create SVG element
+        const svg = d3
+          .select("#container")
+          .attr("width", width)
+          .attr("height", height);
+
+        // Create a group for the graph
+        const graphGroup = svg
+          .append("g")
+          .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // Draw edges
+        const edgeSelection = graphGroup
+          .selectAll("line")
+          .data(edges)
+          .enter()
+          .append("line")
+          .attr("stroke", "red")
+          .attr("stroke-width", 2) // Set line thickness
+          .attr("opacity", 0); // Initially set opacity to 0 for animation
+
+        // Draw vertices
+        const vertexSelection = graphGroup
+          .selectAll("circle")
+          .data(vertices)
+          .enter()
+          .append("circle")
+          .attr("cx", (d) => d.x)
+          .attr("cy", (d) => d.y)
+          .attr("r", 5)
+          .attr("fill", (d, i) => (onConvexHull[i] ? "red" : "green"));
+
+        // Display vertex coordinates
+        const textSelection = graphGroup
+          .selectAll("text")
+          .data(vertices)
+          .enter()
+          .append("text");
+
+        // Function to animate the graph
+        function animateGraph() {
+          edgeSelection
+            .transition()
+            .duration(animationDuration)
+            .attr("opacity", 1) // Set opacity to 1 for visibility
+            .delay((d, i) => i * animationDuration) // Delay each edge animation
+            .attr("x1", (d) => vertices[d.source].x)
+            .attr("y1", (d) => vertices[d.source].y)
+            .attr("x2", (d) => vertices[d.source].x) // Start from source
+            .attr("y2", (d) => vertices[d.source].y) // Start from source
+            .transition()
+            .duration(animationDuration)
+            .attr("x2", (d) => vertices[d.target].x) // Move to target
+            .attr("y2", (d) => vertices[d.target].y); // Move to target
+        }
+
+        // Call the animate function
+        animateGraph();
+
+        // Create x and y axes
+        const xAxis = d3.axisBottom().scale(
+          d3
+            .scaleLinear()
+            .domain([-innerWidth / 2, innerWidth / 2])
+            .range([0, innerWidth])
+        );
+        const yAxis = d3.axisLeft().scale(
+          d3
+            .scaleLinear()
+            .domain([-innerHeight / 2, innerHeight / 2])
+            .range([innerHeight, 0])
+        );
+
+        // Append x axis
+        graphGroup
+          .append("g")
+          .attr("transform", `translate(0, ${innerHeight / 2})`)
+          .call(xAxis);
+
+        // Append y axis
+        graphGroup
+          .append("g")
+          .attr("transform", `translate(${innerWidth / 2}, 0)`)
+          .call(yAxis);
+      }
+
+      class Polygon {
+        constructor(polygon) {
+          this.polygon = polygon;
+          this.convex_hull = [];
+        }
+
+        crossProduct(pointA, pointB, pointC) {
+          return (
+            (pointC.x - pointA.x) * (pointB.y - pointA.y) -
+              (pointC.y - pointA.y) * (pointB.x - pointA.x) >
+            0
+          );
+        }
+
+        sortPoints(pointA, pointB) {
+          if (pointA.x !== pointB.x) {
+            return pointA.x < pointB.x;
+          }
+          return pointA.y < pointB.y;
+        }
+
+        computeConvexHull() {
+          if (this.polygon.length < 3) {
+            return [];
+          }
+          this.polygon.sort((pointA, pointB) => {
+            if (pointA.x !== pointB.x) {
+              return pointA.x - pointB.x;
+            }
+            return pointA.y - pointB.y;
+          });
+
+          let upperHull = [this.polygon[0], this.polygon[1]];
+          for (let i = 2; i < this.polygon.length; i++) {
+            while (
+              upperHull.length > 1 &&
+              !this.crossProduct(
+                upperHull[upperHull.length - 2],
+                upperHull[upperHull.length - 1],
+                this.polygon[i]
+              )
+            ) {
+              upperHull.pop();
+            }
+            upperHull.push(this.polygon[i]);
+          }
+
+          let lowerHull = [
+            this.polygon[this.polygon.length - 1],
+            this.polygon[this.polygon.length - 2],
+          ];
+          for (let i = this.polygon.length - 3; i >= 0; i--) {
+            while (
+              lowerHull.length > 1 &&
+              !this.crossProduct(
+                lowerHull[lowerHull.length - 2],
+                lowerHull[lowerHull.length - 1],
+                this.polygon[i]
+              )
+            ) {
+              lowerHull.pop();
+            }
+            lowerHull.push(this.polygon[i]);
+          }
+
+          this.convex_hull = upperHull
+            .slice(0, upperHull.length - 1)
+            .concat(lowerHull.slice(0, lowerHull.length - 1));
+          return this.convex_hull;
+        }
+
+        plotConvexHull() {
+          // Get the canvas element
+          const canvas = document.getElementById("canvas");
+          if (!canvas.getContext) {
+            console.error("Canvas not supported!");
+            return;
+          }
+          const ctx = canvas.getContext("2d"); // Clear canvas
+          ctx.clearRect(0, 0, canvas.width, canvas.height); // Logging polygon points
+
+          console.log("Polygon Points:");
+          this.polygon.forEach((point) => {
+            console.log(point.toString());
+            this.plotPoint(ctx, point, "blue");
+          }); // Logging convex hull points
+
+          console.log("\nConvex Hull:");
+          this.convex_hull.forEach((point) => {
+            console.log(point.toString());
+            this.plotPoint(ctx, point, "red");
+          }); // Draw lines between convex hull points
+
+          this.plotConvexHullLines(ctx);
+        }
+
+        plotPoint(ctx, point, color) {
+          ctx.beginPath(); // Scale and center the points properly within the canvas
+          const scale = 8; // Adjust the scale factor as needed
+          const centerX = canvas.width / 2;
+          const centerY = canvas.height / 2;
+          ctx.arc(
+            centerX + point.x * scale,
+            centerY - point.y * scale,
+            5,
+            0,
+            2 * Math.PI
+          ); // Increase point size for better visibility
+          ctx.fillStyle = color;
+          ctx.fill();
+          ctx.closePath();
+        }
+
+        plotConvexHullLines(ctx) {
+          if (this.convex_hull.length < 2) {
+            return;
+          }
+          ctx.beginPath();
+          const scale = 8; // Adjust the scale factor as needed
+          const centerX = canvas.width / 2;
+          const centerY = canvas.height / 2;
+          ctx.moveTo(
+            centerX + this.convex_hull[0].x * scale,
+            centerY - this.convex_hull[0].y * scale
+          );
+          for (let i = 1; i < this.convex_hull.length; i++) {
+            ctx.lineTo(
+              centerX + this.convex_hull[i].x * scale,
+              centerY - this.convex_hull[i].y * scale
+            );
+          }
+          ctx.closePath();
+          ctx.strokeStyle = "red";
+          ctx.stroke();
+        }
+      }
+      const width = 800;
+      const height = 600;
+      const margin = { top: 50, right: 50, bottom: 50, left: 50 };
+      const innerWidth = width - margin.left - margin.right;
+      const innerHeight = height - margin.top - margin.bottom;
+
+      const allPts = JSON.parse(localStorage["coordinatesList"]);
+      /* var link = window.link.href;
+      link = link.replace("http://127.0.0.1:5500/index.html?", ""); */
+      console.log("Points passedn\n", allPts);
+
+      const randomPoints = allPts.map((pt) => new Coordinate(pt[0], pt[1]));
+      /* for (let i = 0; i < all; i++) {
+        const x = allPts[i].x;
+        const y = allPts[i].y;
+        randomPoints.push([x, y]);
+      } */
+      console.log(randomPoints);
+      function startConvAnimation() {
+        const polygon = new Polygon(randomPoints);
+        const convexHull = polygon.computeConvexHull();
+        plotConvHull(randomPoints, convexHull);
+        document.getElementById("startbtn").disabled = true;
+        polygon.plotConvexHull();
+      }
+
+      /* class Point {
+        constructor(x, y) {
+          this.x = x;
+          this.y = y;
+        }
+
+        equals(other) {
+          return this.x === other.x && this.y === other.y;
+        }
+
+        lessThan(other) {
+          return this.x < other.x || (this.x === other.x && this.y < other.y);
+        }
+      } */
+
+      class KPS {
+        constructor() {
+          this.points = [];
+        }
+
+        findMedian(arr) {
+          arr.sort();
+          return arr[Math.floor(arr.length / 2)];
+        }
+
+        swap(arr, a, b) {
+          [arr[a], arr[b]] = [arr[b], arr[a]];
+        }
+
+        partition(arr, l, r, x) {
+          let i = l;
+          for (let j = l; j < r; j++) {
+            if (arr[j] === x) {
+              break;
+            }
+          }
+          this.swap(arr, j, r);
+
+          i = l;
+          for (let j = l; j < r; j++) {
+            if (arr[j] <= x) {
+              this.swap(arr, i, j);
+              i += 1;
+            }
+          }
+          this.swap(arr, i, r);
+          return i;
+        }
+
+        kthSmallest(arr, l, r, k) {
+          if (k > 0 && k <= r - l + 1) {
+            const n = r - l + 1;
+            let i = 0;
+            const median = [];
+            while (i < Math.floor(n / 5)) {
+              median.push(this.findMedian(arr.slice(l + i * 5, l + i * 5 + 5)));
+              i += 1;
+            }
+            if (i * 5 < n) {
+              median.push(
+                this.findMedian(arr.slice(l + i * 5, l + i * 5 + (n % 5)))
+              );
+              i += 1;
+            }
+
+            const medOfMed =
+              i === 1
+                ? median[i - 1]
+                : this.kthSmallest(median, 0, i - 1, Math.floor(i / 2));
+
+            const pos = this.partition(arr, l, r, medOfMed);
+
+            if (pos - l === k - 1) {
+              return arr[pos];
+            }
+            if (pos - l > k - 1) {
+              return this.kthSmallest(arr, l, pos - 1, k);
+            }
+            return this.kthSmallest(arr, pos + 1, r, k - pos + l - 1);
+          }
+
+          return Infinity;
+        }
+
+        abs(a) {
+          return Math.abs(a);
+        }
+
+        getT(p1, p2, points, flag) {
+          const upperT = [];
+          const slope = (p1.y - p2.y) / (p1.x - p2.x);
+          for (const currPoint of points) {
+            if (p1.x < currPoint.x && currPoint.x < p2.x) {
+              const currSlope = (p1.y - currPoint.y) / (p1.x - currPoint.x);
+              if ((!flag && currSlope > slope) || (flag && currSlope < slope)) {
+                upperT.push(currPoint);
+              }
+            }
+          }
+          upperT.push(p1);
+          upperT.push(p2);
+          return upperT;
+        }
+
+        getUpperBridge(points, median) {
+          points.sort((p1, p2) => p1.x - p2.x);
+
+          const candidates = [];
+          const pairs = [];
+          const slopes = [];
+
+          if (points.length % 2 === 0) {
+            for (let i = 0; i < points.length; i += 2) {
+              const currPair = [points[i], points[i + 1]];
+              pairs.push(currPair);
+            }
+          } else {
+            candidates.push(points[0]);
+            for (let i = 1; i < points.length; i += 2) {
+              const currPair = [points[i], points[i + 1]];
+              pairs.push(currPair);
+            }
+          }
+
+          for (const [p1, p2] of pairs) {
+            const x1 = p1.x;
+            const x2 = p2.x;
+            const y1 = p1.y;
+            const y2 = p2.y;
+
+            if (x1 === x2) {
+              if (y1 > y2) {
+                candidates.push(p1);
+              } else {
+                candidates.push(p2);
+              }
+              slopes.push(Infinity);
+            } else {
+              const slope = (y2 - y1) / (x2 - x1);
+              slopes.push(slope);
+            }
+          }
+
+          slopes = slopes.filter((s) => s !== Infinity);
+          const medianSlope = this.kthSmallest(
+            slopes,
+            0,
+            slopes.length - 1,
+            Math.floor((slopes.length + 1) / 2)
+          );
+
+          const SMALL = [];
+          const EQUAL = [];
+          const LARGE = [];
+
+          for (let i = 0; i < pairs.length; i++) {
+            const [p1, p2] = pairs[i];
+            const x1 = p1.x;
+            const x2 = p2.x;
+            const y1 = p1.y;
+            const y2 = p2.y;
+
+            if (x1 !== x2) {
+              const slope = (y2 - y1) / (x2 - x1);
+              if (Math.abs(slope - medianSlope) < 0.001) {
+                EQUAL.push([p1, p2]);
+              } else if (slope < medianSlope) {
+                SMALL.push([p1, p2]);
+              } else if (slope > medianSlope) {
+                LARGE.push([p1, p2]);
+              }
+            }
+          }
+
+          let maxC = -Infinity;
+          for (const [x, y] of points.map((p) => [p.x, p.y])) {
+            const currC = y - medianSlope * x;
+            if (currC > maxC) {
+              maxC = currC;
+            }
+          }
+
+          let pmin = new Point(Infinity, Infinity);
+          let pmax = new Point(-Infinity, -Infinity);
+
+          for (const [x, y] of points.map((p) => [p.x, p.y])) {
+            const currC = y - medianSlope * x;
+            if (Math.abs(currC - maxC) < 0.001) {
+              if (x < pmin.x) {
+                pmin.x = x;
+                pmin.y = y;
+              }
+              if (x > pmax.x) {
+                pmax.x = x;
+                pmax.y = y;
+              }
+            }
+          }
+
+          if (pmin.x <= median && median < pmax.x) {
+            const upperBridge = [pmin, pmax];
+            return upperBridge;
+          } else if (pmax.x <= median) {
+            for (const [p1, p2] of EQUAL) {
+              candidates.push(p2);
+            }
+            for (const [p1, p2] of LARGE) {
+              candidates.push(p2);
+            }
+            for (const [p1, p2] of SMALL) {
+              candidates.push(p1);
+            }
+            return this.getUpperBridge(candidates, median);
+          } else if (pmin.x > median) {
+            for (const [p1, p2] of EQUAL) {
+              candidates.push(p1);
+            }
+            for (const [p1, p2] of LARGE) {
+              candidates.push(p1);
+            }
+            for (const [p1, p2] of SMALL) {
+              candidates.push(p1);
+            }
+            return this.getUpperBridge(candidates, median);
+          }
+        }
+
+        getLowerBridge(points, median) {
+          points.sort((p1, p2) => p1.x - p2.x);
+
+          const candidates = [];
+          const pairs = [];
+          const slopes = [];
+
+          if (points.length % 2 === 0) {
+            for (let i = 0; i < points.length; i += 2) {
+              const currPair = [points[i], points[i + 1]];
+              pairs.push(currPair);
+            }
+          } else {
+            candidates.push(points[0]);
+            for (let i = 1; i < points.length; i += 2) {
+              const currPair = [points[i], points[i + 1]];
+              pairs.push(currPair);
+            }
+          }
+
+          for (const [p1, p2] of pairs) {
+            const x1 = p1.x;
+            const x2 = p2.x;
+            const y1 = p1.y;
+            const y2 = p2.y;
+
+            if (x1 === x2) {
+              if (y1 > y2) {
+                candidates.push(p2);
+              } else {
+                candidates.push(p1);
+              }
+              slopes.push(Infinity);
+            } else {
+              const slope = (y2 - y1) / (x2 - x1);
+              slopes.push(slope);
+            }
+          }
+
+          slopes = slopes.filter((s) => s !== Infinity);
+          const medianSlope = this.kthSmallest(
+            slopes,
+            0,
+            slopes.length - 1,
+            Math.floor((slopes.length + 1) / 2)
+          );
+
+          const SMALL = [];
+          const EQUAL = [];
+          const LARGE = [];
+
+          for (let i = 0; i < pairs.length; i++) {
+            const [p1, p2] = pairs[i];
+            const x1 = p1.x;
+            const x2 = p2.x;
+            const y1 = p1.y;
+            const y2 = p2.y;
+
+            if (x1 !== x2) {
+              const slope = (y2 - y1) / (x2 - x1);
+              if (Math.abs(slope - medianSlope) < 0.001) {
+                EQUAL.push([p1, p2]);
+              } else if (slope < medianSlope) {
+                SMALL.push([p1, p2]);
+              } else if (slope > medianSlope) {
+                LARGE.push([p1, p2]);
+              }
+            }
+          }
+
+          let minC = Infinity;
+
+          for (const [x, y] of points.map((p) => [p.x, p.y])) {
+            const currC = y - medianSlope * x;
+            if (currC < minC) {
+              minC = currC;
+            }
+          }
+
+          let pmin = new Point(Infinity, Infinity);
+          let pmax = new Point(-Infinity, -Infinity);
+
+          for (const [x, y] of points.map((p) => [p.x, p.y])) {
+            const currC = y - medianSlope * x;
+            if (Math.abs(currC - minC) < 0.001) {
+              if (x < pmin.x) {
+                pmin.x = x;
+                pmin.y = y;
+              }
+              if (x > pmax.x) {
+                pmax.x = x;
+                pmax.y = y;
+              }
+            }
+          }
+
+          if (pmin.x <= median && median < pmax.x) {
+            const lowerBridge = [pmin, pmax];
+            return lowerBridge;
+          } else if (pmax.x <= median) {
+            for (const [p1, p2] of EQUAL) {
+              candidates.push(p2);
+            }
+            for (const [p1, p2] of LARGE) {
+              candidates.push(p2);
+            }
+            for (const [p1, p2] of SMALL) {
+              candidates.push(p1);
+            }
+            return this.getLowerBridge(candidates, median);
+          } else if (pmin.x > median) {
+            for (const [p1, p2] of EQUAL) {
+              candidates.push(p1);
+            }
+            for (const [p1, p2] of LARGE) {
+              candidates.push(p1);
+            }
+            for (const [p1, p2] of SMALL) {
+              candidates.push(p1);
+            }
+            return this.getLowerBridge(candidates, median);
+          }
+        }
+
+        getUpperHull(pmin, pmax, points) {
+          const upperHull = [];
+          const n = points.length;
+          const arr = points.map((p) => p.x);
+          const median =
+            n === 1
+              ? arr[0]
+              : this.kthSmallest(arr, 0, n - 1, Math.floor((n + 1) / 2));
+          const upperBridge = this.getUpperBridge(points, median);
+
+          let pl = upperBridge[0];
+          let pr = upperBridge[1];
+
+          if (pl.x > pr.x) {
+            [pl, pr] = [pr, pl];
+          }
+
+          upperHull.push(pl);
+          upperHull.push(pr);
+
+          if (!pmin.equals(pl)) {
+            const upperTLeft = this.getT(pmin, pl, points, false);
+            const left = this.getUpperHull(pmin, pl, upperTLeft);
+            upperHull.push(...left);
+          }
+
+          if (!pmax.equals(pr)) {
+            const upperTRight = this.getT(pr, pmax, points, false);
+            const right = this.getUpperHull(pr, pmax, upperTRight);
+            upperHull.push(...right);
+          }
+
+          return upperHull;
+        }
+
+        getLowerHull(pmin, pmax, points) {
+          const lowerHull = [];
+          const n = points.length;
+          const arr = points.map((p) => p.x);
+          const median =
+            n === 1
+              ? arr[0]
+              : this.kthSmallest(arr, 0, n - 1, Math.floor((n + 1) / 2));
+          const lowerBridge = this.getLowerBridge(points, median);
+
+          let pl = lowerBridge[0];
+          let pr = lowerBridge[1];
+
+          if (pl.x > pr.x) {
+            [pl, pr] = [pr, pl];
+          }
+
+          lowerHull.push(pl);
+          lowerHull.push(pr);
+
+          if (!pmin.equals(pl)) {
+            const lowerTLeft = this.getT(pmin, pl, points, true);
+            const left = this.getLowerHull(pmin, pl, lowerTLeft);
+            lowerHull.push(...left);
+          }
+          if (!pmax.equals(pr)) {
+            const lowerTRight = this.getT(pr, pmax, points, true);
+            const right = this.getLowerHull(pr, pmax, lowerTRight);
+            lowerHull.push(...right);
+          }
+
+          return lowerHull;
+        }
+
+        fitSet(points) {
+          this.points = points;
+        }
+
+        addPoint(pt) {
+          this.points.push(pt);
+        }
+
+        computeHull() {
+          if (this.points.length < 3) {
+            console.log("Hull doesn't exist!!");
+            return [];
+          }
+
+          const pminU = Math.min(...this.points);
+          const pmaxU = Math.max(...this.points);
+          const pminL = this.points.reduce((min, p) =>
+            p.x < min.x || (p.x === min.x && p.y < min.y) ? p : min
+          );
+          const pmaxL = this.points.reduce((max, p) =>
+            p.x > max.x || (p.x === max.x && p.y > max.y) ? p : max
+          );
+
+          const upperT = this.getT(pminU, pmaxU, this.points, false);
+          const upperHull = this.getUpperHull(pminU, pmaxU, upperT);
+
+          const lowerT = this.getT(pminL, pmaxL, this.points, true);
+          const lowerHull = this.getLowerHull(pminL, pmaxL, lowerT);
+
+          const hullEdges = [...upperHull, ...lowerHull];
+          if (!pminU.equals(pminL)) {
+            hullEdges.push(pminL);
+            hullEdges.push(pminU);
+          }
+          if (!pmaxU.equals(pmaxL)) {
+            hullEdges.push(pmaxL);
+            hullEdges.push(pmaxU);
+          }
+
+          hullEdges.sort();
+          const hull = [hullEdges[0]];
+          for (let i = 1; i < hullEdges.length; i++) {
+            if (!hullEdges[i].equals(hullEdges[i - 1])) {
+              hull.push(hullEdges[i]);
+            }
+          }
+
+          return hull;
+        }
+      }
+      /*
+      // Usage example:
+      const kps = new KPS();
+      const points = [
+        new Point(0, 3),
+        new Point(2, 2),
+        new Point(1, 1),
+        new Point(2, 1),
+        new Point(3, 0),
+        new Point(0, 0),
+        new Point(3, 3),
+      ];
+      kps.fitSet(points);
+      const new____convexHull = kps.computeHull(); */
+    </script>
+  </body>
+</html>
